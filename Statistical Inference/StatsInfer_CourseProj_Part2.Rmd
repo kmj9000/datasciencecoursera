@@ -1,0 +1,180 @@
+---
+title: "Statistical Inference - Course Project Part 2"
+author: "Kenneth Lim"
+date: "Sunday, June 21, 2015"
+output:
+  html_document:
+    keep_md: yes
+  pdf_document: default
+---
+
+## Analysis of the ToothGrowth data
+
+## Overview
+The data  presented is measuring "The Effect of Vitamin C on Tooth Growth in Guinea Pigs." The response is the length of odontoblasts (teeth) in each of 10 guinea pigs at each of three dose levels of Vitamin C (0.5, 1, and 2 mg) with each of two delivery methods (orange juice or ascorbic acid).
+
+We are interested to know the effect of dosage and delivery method on tooth growth.
+
+
+
+```{r global_options}
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+
+
+### Basic exploratory data analyses
+
+We begin with a cursory glance at the data.
+
+```{r}
+summary(ToothGrowth)
+
+head(ToothGrowth)
+
+tail(ToothGrowth)
+
+boxplot(len ~ dose, ToothGrowth)
+```
+
+
+
+### Basic summary of the data
+
+This dataset contains two factors in the `supp` variable, representing the two different delivery methods. Therefore we should look at some summary statistics for each of the two factors taken separately.
+ 
+```{r}
+oj <- levels(ToothGrowth$supp)[1]
+vc <- levels(ToothGrowth$supp)[2]
+
+summary(ToothGrowth[ToothGrowth$supp == oj,])
+summary(ToothGrowth[ToothGrowth$supp == vc,])
+
+par(mfrow = c(1, 2))
+boxplot(len ~ dose, 
+        ToothGrowth[ToothGrowth$supp == oj,], 
+        main="OJ", 
+        xlab="Dose", 
+        ylab="Tooth Length", 
+        ylim=range(0,35))
+boxplot(len ~ dose, 
+        ToothGrowth[ToothGrowth$supp == vc,], 
+        main="VC", 
+        xlab="Dose", 
+        ylab="Tooth Length", 
+        ylim=range(0,35))
+
+library(ggplot2)
+qplot(dose, len, 
+      data = ToothGrowth,
+      facets = . ~ supp,
+      geom = c("point", "smooth"), 
+      method = "loess", 
+      formula = y ~ x, 
+      color = dose, 
+      ylim = c(0, 35),
+      main = "Effect of Dose on Tooth Length",
+      xlab = "Dose", 
+      ylab = "Tooth Length") 
+```
+
+
+
+### Confidence intervals and hypothesis tests
+
+Looking at these figures it seems quite probable that dose has an effect on tooth length, but it's not clear what role delivery method plays. Looking at the figure however reveals that dose is not really a continuous variable, but rather a categorical. We therefore convert dose in our dataset to a factor.
+
+```{r}
+ToothGrowth$dose <- as.factor(ToothGrowth$dose)
+```
+
+First we'll look at the effect of delivery method to determine if in fact it has any significant effect on tooth length. We'll perform a t test, but first we need to determine if the variances between the two groups are roughly equal.
+
+```{r}
+sapply(split(ToothGrowth$len, ToothGrowth$supp), var)
+```
+
+**Assumptions:**  
+* They seem rather far apart, so we assume that the group variances are not equal.  
+* Also note that for all of the statistical methods performed throughtout, we assume that subjects were randomly assigned to the various groups.
+
+```{r}
+supp.test <- t.test(ToothGrowth$len[ToothGrowth$supp=="VC"], 
+                    ToothGrowth$len[ToothGrowth$supp=="OJ"], 
+                    paired = F, 
+                    var.equal = F)
+supp.test
+```
+
+A 0.06 p value, a small-ish t statistic, and the 95% confidence interval including zero all indicate that we must fail to reject the null hypothesis, and we must assume that these differences could be due to chance.
+ 
+So now we need to test the effect of dose on tooth length. For this, we'll need to do a two sample t test for each of the three comparisons possible for the three dosage groups.
+
+```{r}
+sapply(split(ToothGrowth$len, ToothGrowth$dose), var)
+```
+
+The variances of the three dosages groups are relatively close, so we can assume the variance is equal.
+
+```{r}
+dose.groups <- split(ToothGrowth$len, ToothGrowth$dose)
+
+point.five.one.test <- t.test(dose.groups[["0.5"]], 
+                              dose.groups[["1"]],
+                              paired = F, 
+                              var.equal = T)
+point.five.one.test
+```
+
+
+
+### Conclusions
+
+With a very small p value well below 0.05 and confidence interval between -11.983748 and -6.276252, we can reject the null hypothesis and conclude that dosage may have an effect on tooth length for the 0.5 and 1.0 dosage groups.
+
+```{r}
+one.two.test <- t.test(dose.groups[["1"]], 
+                       dose.groups[["2"]],
+                       paired = F, 
+                       var.equal = T)
+one.two.test
+```
+
+Similarly, the t test for the 1.0 and 2.0 dosage groups yields a p value less than 0.05 and confidence interval which does not contain zero, so we can reject the null hypothesis and conclude that dosage may have an effect on tooth length for the 1.0 and 2.0 dosage groups.
+
+And of course, the t test for the 0.5 and 2.0 dosage groups will lead us to reject the null hypothesis as well.
+
+```{r}
+point.five.two.test <- t.test(dose.groups[["0.5"]], 
+                              dose.groups[["2"]],
+                              paired = F, 
+                              var.equal = T)
+point.five.two.test
+```
+
+Finally, to control for family-wise error rate we use the Bonferroni correction as follows:
+
+```{r}
+all.tests <- c(supp.test$p.value, 
+               point.five.one.test$p.value, 
+               one.two.test$p.value, 
+               point.five.two.test$p.value)
+
+sum(p.adjust(all.tests, method = "bonferroni") < 0.05)
+
+round(p.adjust(all.tests, method = "bonferroni"), 3)
+```
+
+And to control for false discovery rate we use the BH correction:
+
+```{r}
+sum(p.adjust(all.tests, method = "BH") < 0.05)
+
+round(p.adjust(all.tests, method = "BH"), 3)
+
+par(mfrow = c(1, 2))
+plot(all.tests, p.adjust(all.tests, method = "bonferroni"), pch = 19)
+plot(all.tests, p.adjust(all.tests, method = "BH"), pch = 19)
+```
+
+
