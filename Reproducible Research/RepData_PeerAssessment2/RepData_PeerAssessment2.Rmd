@@ -1,0 +1,146 @@
+---
+title: "Reproducible Research - Peer Assessment 2"
+author: "Kenneth Lim"
+date: "Sunday, June 21, 2015"
+output: html_document
+---
+
+## Impact of Severe Weather Events on Public Health and Wealth in the United States
+
+
+### Synonpsis
+
+In this report we aim to analyze the impact of storms weather events on public health and economy using the U.S. National Oceanic and Atmospheric Administration's (NOAA) from 1950 - 2011 database. We used the the estimates fatalities, injuries, property damage and crop damage to find the most harmful events for health and wealth. Tornado and exessive heat were found to be the most harmful events to public health, while flood, hurricanes and tornados caused the most amount of economic damage.
+
+
+### Import Packages
+
+Import necessary packages.
+
+```{r}
+#install.packages("dplyr")
+library(dplyr)
+
+#install.packages("ggplot2")
+library(ggplot2)
+
+#install.packages("tidyr")
+library(tidyr)
+
+#install.packages("Rcpp")
+library(Rcpp)
+```
+
+
+
+### Data Processing
+
+Load the data from the repdata-data-StormData.csv.bz2 file.
+
+```{r}
+# Set working dir
+setwd("C:\\Users\\Kenneth\\Documents\\datasciencecoursera\\Reproducible Research\\RepData_PeerAssessment2")
+
+# Load data
+data <- read.csv(bzfile('repdata-data-StormData.csv.bz2', 'repdata-data-StormData.csv')) %>% tbl_df
+```
+
+We will convert the property damage and crop damage data into comparable numerical forms according to the meaning of units described in the code book. Both PROPDMGEXP and CROPDMGEXP columns record a multiplier for each observation where we have Hundred (H), Thousand (K), Million (M) and Billion (B).
+
+```{r}
+# Function to transform the Expoents to Numbers
+ExpToNumber <- function(e) { 
+  f <- function(x) switch(x, '1' = 10, '2' = 100, '3' = 1000, '4' = 10000, '5' = 100000, '6' = 1000000,
+                          '7' = 10000000, '8' = 100000000, 'h' = 100, 'H' = 100, 'k' = 1000, 'K' = 1000,
+                          'm' = 1000000, 'M' = 1000000,'b' = 1000000000, 'B' = 1000000000, NA)
+  unlist(sapply(e, f))
+ }
+
+data <- mutate(data, PROPDMGTOTAL = PROPDMG * ExpToNumber(as.character(PROPDMGEXP)),
+                     CROPDMGTOTAL = CROPDMG * ExpToNumber(as.character(CROPDMGEXP)),
+                     DMGTOTAL     = rowSums(cbind(PROPDMGTOTAL, CROPDMGTOTAL), na.rm = T))
+```
+
+
+
+### Results
+
+#### Impact on Public Health
+
+The number of fatalities and injuries will be used to analyse the impact on public health.
+
+Group data by Event type (EVTYPE), and calculate the sum of fatalities (FATALITIES) and injuries (INJURIES).
+
+```{r}
+# Group Data By Event Type
+data_by_EvTypes <- group_by(data, EVTYPE)
+
+# Sumarise Total Fatalities and Injuries by Event Type
+sumHarmfPerType <- summarise(data_by_EvTypes,
+                             FatalitiesTotal = sum(FATALITIES, na.rm = T),
+                             InjuriesTotal = sum(INJURIES, na.rm = T))
+```
+
+Extract and plot the 10 events with the highest number of fatalities.
+
+```{r}
+# Extract the Top 10 Fatalities Events Type
+topFatalEvType  <- top_n(sumHarmfPerType, 10, FatalitiesTotal)
+
+# Plot Fatalities
+ggplot(topFatalEvType, 
+  aes(x = reorder(EVTYPE, desc(FatalitiesTotal)), y = FatalitiesTotal)) +
+  geom_bar(stat = 'identity') + theme_bw() +
+  labs(x = 'Events Type', y = 'Total Fatalities', title = 'Fatalities by Event Type') +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+Extract and plot the 10 events with the highest number of injuries.
+
+```{r}
+# Extract the Top 10 Injuries Events Type
+topInjurEvType  <- top_n(sumHarmfPerType, 10, InjuriesTotal)
+
+# Plot Injuries
+ggplot(topInjurEvType, 
+  aes(x = reorder(EVTYPE, desc(InjuriesTotal)), y = InjuriesTotal)) +
+  geom_bar(stat = 'identity') + theme_bw() +
+  labs(x = 'Events Type', y = 'Total Injuries', title = 'Injuries by Event Type') + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+
+
+#### Impact on Economy
+
+The amount of property damage and crop damage will be used to analyse the impact on public wealth.
+
+Group data by Event type (EVTYPE), and calculate the sum of property damage (PROPDMGTOTAL), crop damage (CROPDMGTOTAL) and the total amount of economical damage.
+
+```{r}
+# Group Data By Event Type
+data_by_EvTypes <- group_by(data, EVTYPE)
+
+# Sumarise Total Fatalities and Injuries by Event Type
+sumEconfPerType <- summarise(data_by_EvTypes,
+                             PropertyDamage = sum(PROPDMGTOTAL, na.rm = T),
+                             CropDamage     = sum(CROPDMGTOTAL, na.rm = T),
+                             DamageTotal    = sum(DMGTOTAL, na.rm = T))
+```
+
+Extract and plot the 10 events with the highest amount of damage.
+
+```{r}
+# Extract the Top 10 Property Damage Events Type
+topDmgEvType  <- top_n(sumEconfPerType, 10, DamageTotal) %>% arrange(desc(DamageTotal))
+
+# Prepare the Data Frame to Be plotted
+topDmgEvType <- topDmgEvType %>% gather(DamageType, Damage, -EVTYPE, -DamageTotal)
+
+# Plot 
+ggplot(topDmgEvType, 
+  aes(x = reorder(EVTYPE, desc(DamageTotal)), y = Damage, fill = DamageType)) +
+  geom_bar(stat = 'identity') + theme_bw() +
+  labs(x = 'Events Type', y = 'Total Damage', title = 'Impact on Economy by Event Type') +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
