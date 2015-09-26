@@ -1,0 +1,114 @@
+---
+title: "Prediction Assigment"
+author: "Kenneth Lim"
+date: "Sep 26, 2015"
+output: "html_document"
+---
+
+
+# Project Assignment
+This document is submission for project assignment for Coursera course - Practical Machine Learning.
+
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+
+## Data
+The training data for this project are available here:
+
+- https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+- https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+
+## Objective
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. Any of the other variables may be used to predict with. This report describes how the model is built, how cross validation is used, the expected out of sample error, and the choices made. The prediction model is also used to predict 20 different test cases.
+
+
+## Data Cleaning
+To clean the data, the first row index and all colomuns with NA were removed. The training and testing data were saved as training2.csv and testing2.csv.
+
+```{r}
+setwd("~/datasciencecoursera/Practical Machine Learning/project")
+
+# Remove everything in current working library
+# rm(list = ls())
+# Read cleaned training and testing data 
+training <- read.table(file = "./data/pml-training2.csv", header = TRUE, sep = ",", quote = "")
+testing <- read.table(file = "./data/pml-testing2.csv", header = TRUE, sep = ",", quote = "")
+
+# Change the numeric type to integer type to make sure 
+# the same data type in training data and testing data
+training$magnet_dumbbell_z <- as.integer(training$magnet_dumbbell_z)
+training$magnet_forearm_y <- as.integer(training$magnet_forearm_y)
+training$magnet_forearm_z <- as.integer(training$magnet_forearm_z)
+
+levels(testing$new_window) <- levels(training$new_window)
+```
+
+
+## Exploratory Data Analysis
+Cross Validation was performed to find the out of sample errors. 
+
+```{r}
+# install.packages("randomForest")
+# install.packages("caret")
+# install.packages('e1071', dependencies=TRUE)
+library(randomForest)
+library(caret)
+```
+
+
+## Exploratory Data Analysis
+```{r}
+set.seed(111)
+# Define cross-validation experiment
+fitControl = trainControl( method = "cv", number = 2)
+# Perform the cross validation
+cv <- train(classe ~ ., data = training, method = "rf", trControl = fitControl)
+cv$bestTune$mtry
+```
+
+
+## Exploratory Data Analysis
+```{r}
+cv
+```
+
+
+## Build random forest model with full training model
+Best Tune of number of variable randomly sampled is: `r cv$bestTune$mtry`
+```{r}
+rForest = randomForest(classe ~ ., data = training, mtry = cv$bestTune$mtry)
+predict4Train = predict(rForest)
+table(predict4Train, training$classe)
+```
+
+
+## Predict testing data
+```{r}
+pForest = predict(rForest, newdata = testing)
+pForest
+```
+
+
+## Write the Prediction to files
+```{r}
+# Function to write a vector to files
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("./submission/problem_id_", i ,".txt")
+    write.table(x[i], file = filename, quote = FALSE,
+                row.names = FALSE, col.names = FALSE)
+  }
+}
+# Call the function
+pml_write_files(pForest)
+
+```
