@@ -1,0 +1,200 @@
+---
+title: "Regression Models Course Project"
+author: "Kenneth Lim"
+date: "Tuesday, July 21, 2015"
+output:
+  html_document:
+    keep_md: yes
+  pdf_document: default
+---
+
+---
+
+## Executive summary
+Here we look at Motor Trend Car Road Tests (mtcars) dataset on a collection of cars and explore the relationship between a set of vairables and miles per gallon (MPG).  In particular, we are interested in addressing the 2 questions:
+
+* Is an automatic or manual transmission better for MPG
+* Quantify the MPG difference between automatic and manual transmissions
+
+To do so, we shall use the following strategy:
+
+1. Performing some exploratory data analyses
+2. Fit multiple multivariable models by using only variables which have the highest correlations with mpg as confounders along with 'am' as the predictor.
+3. Finding the best linear fit by using "step" function.
+4. Examining the residuals and performing some diagnostics.
+5. Quantifying the uncertainty in the final multivariable linear model and making the final inference.
+
+
+## Data Exploration
+
+First, we look at the correlation between mpg and all other variables in the dataset.
+
+```{r results = 'hide'}
+attach(mtcars)
+head(mtcars,5)
+sapply(mtcars,function(x) cor(mpg,x))
+```
+
+*See Results 1 in Appendix.*
+
+Apparently only three variables have weaker correlation with mpg than 'am'. We will ignore these variables for our exploratory analysis since they contain less information than other variables. In Figure 1 in Appendix, we show the correlations between mpg and variables with strong correlations.
+
+```{r results = 'hide'}
+library(stats)
+library(graphics)
+# pairs(mtcars[c('mpg','cyl','disp','hp','drat','wt','vs','am')], panel=panel.smooth,
+#       main='Fig1: mpg vs. parameters with stronger correlation', col = 3)
+```
+
+*See Figure 1 in Appendix.*
+
+## Fitting Models Exploration
+
+We start simple with fitting a linear model with mpg as the outcome and 'am' as the predictor.  
+
+```{r results = 'hide'}
+lm1 <- lm(mpg ~ factor(am))
+summary(lm1)$coef ; print(c('R-squared',round(summary(lm1)$r.sq,2)))
+```
+
+*See Results 2a in Appendix.*
+
+Although the p-values are significantly small, the R-squared shows that the model fit is not a good solution. However, there is a tentative correlation between the mpg and transmission type with manual transmissions having higher mpg (~7 Miles/gallon.) This correlation can be seen also in the top right panel of Figure 1.
+
+But, as mentioned before, this model fit is too simplistic and we need to take the correlation between 'am', mpg and other variables into account. Therefore, we add a confounder to our linear model fit. We pick weight (wt) as it is has the highest correlation with mpg.
+
+```{r results = 'hide'}
+lm2 <- lm(mpg ~ factor(am) + wt)
+summary(lm2)$coef; print(c('R-squared',round(summary(lm2)$r.sq,2)))
+```
+
+*See Results 2b in Appendix.*
+
+As expected, the R-squared has improved significantly. On the other hand, 'am' p-values has decreased immensely and even the coefficient has switch its sing. Based on this 'am' p-value, we cannot reject the null hypothesis and so the previously observed correlation between mpg and 'am' is gone.
+
+Let's add the second most correlated variable (cyl) to mpg as a confounder in our model fit. Note that, adding cyl as the second confounder may not lead to the best solution as we are not taking into account the correlation among the confounder themselves to avoid for example variance inflation. But for exploratory purposes, it is less important.
+
+```{r results = 'hide'}
+lm3 <- lm(mpg ~ factor(am) + wt + factor(cyl))
+summary(lm3)$coef; print(c('R-squared',round(summary(lm3)$r.sq,2)))
+
+anova(lm2,lm3)
+```
+
+*See Results 2c in Appendix.*
+
+The R-squared again has had noticeable improvement as a result of adding another confounder. Furthermore, the analysis of variance (ANOVA) confirms that adding 'cyl' as the coufounder leads to a significant better linear fit.
+
+The 'am' coefficient sign flipped one more time but the p-value is still high enough to not being able to reject the null hypothesis.
+
+
+## Finding The Best Linear Fit
+
+We take advantage of the step function to find the best linear fit.
+
+```{r results = 'hide'}
+full.model <- lm(mpg ~ ., data=mtcars)
+stepSolution <- step(full.model, direction="backward")
+
+best.model <- stepSolution$call
+best.model
+```
+
+*See Results 3a in Appendix.*
+
+So, therefore using wt, am, and qsec we can find the best model fit.
+
+```{r results = 'hide'}
+lm.best <- lm(mpg ~ wt + factor(am) + qsec)
+summary(lm.best)$coef;print(c('R-squared',round(summary(lm.best)$r.sq,2)))
+```
+
+*See Results 3b in Appendix.*
+
+Regarding the 'am', the p-value is smaller than 0.05 and therefore in 95% interval, we can reject the null hypothesis. Therefore, cars with manual transmissions have slightly better mpgs (~3 Miles/gallon.)
+
+The R-squared indicates a reliable fit. We need to look at the residuals to make sure there is no indication of unaccounted variables in our model fit. In order words, we have to make sure there is no pattern in residuals.
+
+```{r results = 'hide'}
+# plot(lm.best,which=1)
+```
+
+*See Figure 3c in Appendix.*
+
+The plots shows that our fit is robust and therefore our final inference is reliable.
+
+Finally, we need to confirm that the assumption that the residuals have normal distribution is a good approximation. We do so but examining the QQ plot.
+
+```{r results = 'hide'}
+# plot(lm.best,which=2)
+```
+
+*See Figure 3d in Appendix.*
+
+It can be seen that the standardized residuals mimic a normal distribution and therefore our statistical inferences are valid.
+
+## Summary
+
+Assuming that the step-function solution finds the best model, based on mtcars data, cars with manual transmissions have slightly better mpgs (~3 Miles/gallon.)
+
+## Appendix
+
+### Results 1
+```{r}
+attach(mtcars)
+head(mtcars,5)
+sapply(mtcars,function(x) cor(mpg,x))
+```
+
+### Figure 1
+```{r}
+library(stats)
+library(graphics)
+pairs(mtcars[c('mpg','cyl','disp','hp','drat','wt','vs','am')], panel=panel.smooth,
+      main='Fig1: mpg vs. parameters with stronger correlation', col = 3)
+```
+
+### Results 2a
+```{r}
+lm1 <- lm(mpg ~ factor(am))
+summary(lm1)$coef ; print(c('R-squared',round(summary(lm1)$r.sq,2)))
+```
+
+### Results 2b
+```{r}
+lm2 <- lm(mpg ~ factor(am) + wt)
+summary(lm2)$coef; print(c('R-squared',round(summary(lm2)$r.sq,2)))
+```
+
+### Results 2c
+```{r}
+lm3 <- lm(mpg ~ factor(am) + wt + factor(cyl))
+summary(lm3)$coef; print(c('R-squared',round(summary(lm3)$r.sq,2)))
+
+anova(lm2,lm3)
+```
+
+### Results 3a
+```{r}
+full.model <- lm(mpg ~ ., data=mtcars)
+stepSolution <- step(full.model, direction="backward")
+
+best.model <- stepSolution$call
+best.model
+```
+
+### Results 3b
+```{r}
+lm.best <- lm(mpg ~ wt + factor(am) + qsec)
+summary(lm.best)$coef;print(c('R-squared',round(summary(lm.best)$r.sq,2)))
+```
+
+### Figure 3c
+```{r}
+plot(lm.best,which=1)
+```
+
+### Figure 3d
+```{r}
+plot(lm.best,which=2)
+```
