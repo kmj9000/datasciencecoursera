@@ -1,0 +1,30 @@
+Shiny application on MT cars fuel consumption (Developing Data Products Course Project)
+========================================================
+author: Kenneth Lim
+date: 25 Sept 2015
+
+
+Presentation Objective
+========================================================
+The objective is to present the Shiny application created as a course project of the Coursera - Developing Data Products course.
+
+
+Design
+========================================================
+The application uses the default "mtcars" dataset installed with R. It contains plot settings for interactive data analysis without much code modifications.
+
+The application can be accessed at the following URL:
+https://kmj9000.shinyapps.io/Developing_Data_Products
+
+The data is from the 1974 Motor Trend US magazine and comprises fuel consumption and ten characteristics of automobile design and performance for 32 cars (1973-74 models).
+
+Plotting
+========================================================
+
+To plot in R, just simply run plot(mtcars)
+![plot of chunk unnamed-chunk-1](presentation-figure/unnamed-chunk-1-1.png) 
+
+Summary - Page 5
+========================================================
+
+This Shiny application displays the fuel consumption based on the transmission type, cylinders and horse power variables.
