@@ -1,0 +1,274 @@
+---
+title: "Data Science Capstone Project Final Report"
+author: "Kenneth Lim"
+date: "Sunday, November 22, 2015"
+output: pdf_document
+---
+
+## Yelp Dataset Challenge
+
+### 1. Introduction
+
+This Coursera Data Science Course Capstone Project requires course participants to use the datasets provided by [Yelp Dataset Challenge](http://www.yelp.com/dataset_challenge) to come up with their own data science ideas and implement them.
+
+Yelp is a business review online platform where users share reviews with other users or businesses.  The datasets provided consists of information on the businesses being reviewed ('business', 'check-in'), the reviews ('review'), the reviewers ('user') and any helpful tips provided ('tip').
+
+The initial targeted question this project attempts to answer is - **If a specific business is looking to expand i.e. setting up a new outlet, which location/neighbourhood/city would likely be most favourable?**
+
+
+### 2. Methods
+
+##### Get & Prepare the Data
+
+The datasets are downloaded via the [link](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/yelp_dataset_challenge_academic_dataset.zip) provided in the Coursera Capstone project instructions.  Once downloaded and unzipped, the 5 pseudo-JSON files are read and flattened as R data tables for easy manipulation.  These objects are also saved as RDS for easy reload in subsequent R sessions.
+
+```{r init, echo=FALSE, message=FALSE, warning=FALSE}
+library("knitr")
+opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE)
+
+## Set working dir
+setwd("~/datasciencecoursera/Capstone")
+```
+
+```{r download_n_prep, results='hide'}
+# install.packages("jsonlite")
+library("jsonlite")
+# install.packages("dplyr")
+library(dplyr)
+library("R.utils")
+library("data.table")
+
+## Download and unzip dataset
+dataDir <- "./DataSet"
+zipFile <- paste(dataDir, "yelp_dataset_challenge_academic_dataset.zip", sep = "/")
+# download.file("https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/yelp_dataset_challenge_academic_dataset.zip", zipFile)
+# unzip(zipFile)
+
+## Load pseudo-JSON data files
+## Credit to solution provided in course forum https://class.coursera.org/dsscapstone-005/forum/thread?thread_id=24
+bizDataFilePath <- paste(dataDir, "yelp_academic_dataset_business.json", sep="/")
+chkDataFilePath <- paste(dataDir, "yelp_academic_dataset_checkin.json", sep="/")
+revDataFilePath <- paste(dataDir, "yelp_academic_dataset_review.json", sep="/")
+tipDataFilePath <- paste(dataDir, "yelp_academic_dataset_tip.json", sep="/")
+usrDataFilePath <- paste(dataDir, "yelp_academic_dataset_user.json", sep="/")
+# bizData <- fromJSON(sprintf("[%s]", paste(readLines(bizDataFilePath), collapse = ",")), flatten = TRUE)
+# chkData <- fromJSON(sprintf("[%s]", paste(readLines(chkDataFilePath), collapse = ",")), flatten = TRUE)
+# revData <- fromJSON(sprintf("[%s]", paste(readLines(revDataFilePath), collapse = ",")), flatten = TRUE)
+# tipData <- fromJSON(sprintf("[%s]", paste(readLines(tipDataFilePath), collapse = ",")), flatten = TRUE)
+# usrData <- fromJSON(sprintf("[%s]", paste(readLines(usrDataFilePath), collapse = ",")), flatten = TRUE)
+
+## Save objects in binary for ease of subsequent reloading
+# saveRDS(bizData, paste(dataDir, "bizData.rds", sep="/"))
+# saveRDS(chkData, paste(dataDir, "chkData.rds", sep="/"))
+# saveRDS(revData, paste(dataDir, "revData.rds", sep="/"))
+# saveRDS(tipData, paste(dataDir, "tipData.rds", sep="/"))
+# saveRDS(usrData, paste(dataDir, "usrData.rds", sep="/"))
+
+## Quickly reload objects for subsequent R sessions
+bizData <- readRDS(paste(dataDir, "bizData.rds", sep="/"))
+chkData <- readRDS(paste(dataDir, "chkData.rds", sep="/"))
+revData <- readRDS(paste(dataDir, "revData.rds", sep="/"))
+tipData <- readRDS(paste(dataDir, "tipData.rds", sep="/"))
+usrData <- readRDS(paste(dataDir, "usrData.rds", sep="/"))
+```
+
+##### Exploratory Analysis
+
+```{r prelim_data_explore, results='hide'}
+## Check the no. of rows and columns 
+dim(bizData); dim(chkData); dim(revData); dim(tipData); dim(usrData)
+
+## Explore the column headers
+names(bizData); names(chkData); names(revData); names(tipData); names(usrData)
+
+## Display the structure
+str(bizData); str(chkData); str(revData); str(tipData); str(usrData)
+
+## Display 1st 6 records
+head(bizData); head(chkData); head(revData); head(tipData); head(usrData)
+```
+
+From preliminary data exploration and past experience with relational database (RDBMS), it becomes immediately apparent that the datasets are inter-related with business_id and user_id used as primary/foreign keys. 
+
+An examination of the business dataset reveals that each business is tagged by multiple categories.  Since the target question calls for a specific business, a business category has to be selected.  A quick tabulation as well as word cloud shows 783 possible candidates.  "Restaurants" jumps out as clear winner with 21892 records out of 61184.
+
+```{r biz_category_explore, fig.height=2.5}
+# install.packages("wordcloud")
+library("wordcloud")
+
+## Tabulate business categories
+bizCategory <- as.data.frame(table(unlist(bizData$categories)))
+colnames(bizCategory) <- c("category", "frequency")
+
+## Plot the word cloud
+wordcloud(bizCategory$category, bizCategory$frequency, random.order=FALSE, max.words=100, min.freq=100, scale=c(1.1, .3), colors=brewer.pal(8, "Dark2"))
+```
+
+Using the business dataset, initial plotting on world map quickly reveals that most open restaurant businesses in the Yelp dataset are US-based (13753 out of 17558) with the remaining 3805 residing in European continent.  For the purpose of this project, we assume the focus is in the US.  Upon narrowing onto US map, it becomes apparent where restaurant businesses in Yelp's dataset are clustering around.
+
+```{r map_plot, fig.height=3}
+# install.packages("maps")
+library("ggplot2")
+# install.packages("ggplot2")
+library("maps")
+
+## Load US map data and plot all states
+allStates <- map_data("state")
+mapPlot <- ggplot() + ggtitle("Open restaurants") + labs(x="Longitude", y="Latitude")
+mapPlot <- mapPlot + geom_polygon(data=allStates, aes(x=long, y=lat, group = group),colour="white", fill="grey80")
+
+## Restrict businesses to only those open restaurants located in US.  Plot them as points.
+restBiz <- bizData[grep('Restaurants', bizData$categories), ]
+usRest <- subset(restBiz, state %in% state.abb)
+openUsRest <- subset(usRest, open=='TRUE')
+
+mapPlot <- mapPlot + geom_point(data=openUsRest, aes(x=longitude, y=latitude), color="blue", alpha=.02)
+
+## Display the states' abbreviation where open restaurants are located
+mapPlot <- mapPlot + geom_text(data=openUsRest[!duplicated(openUsRest$state),], hjust=0.5, vjust=-0.5, aes(x=longitude, y=latitude, label=state), colour="red", size=4)
+mapPlot
+```
+
+### Approach
+
+Now to address the targeted question:
+
+1. For a specific business category, we look for cities where there are high ratio of open businesses to closed ones as well as high volume of transactions proxied by no. of check-ins provided by the check-in dataset.  This reflects that market demand there are able to support the specific business and market supply have not gone past market saturation point.
+2. Once we have selected the city, we shall make a preliminary plot of the restaurants' locations for any obvious pattern or clusters.
+3. Using data clustering algorithms (e.g. K-means), we attempt to identify locations of high market demands (proxied by check-ins volume) and conducive consumer market (proxied by high review ratings and high volume of reviews).
+
+
+### 3. Results
+
+##### Candidate City
+
+To look for our target city, we plot the ratio of open restaurants vs all restaurants vs volume of check-ins in each US city.  It should be noted that:
+
+* The value of the textual field "city" is not consistently maintained (e.g. spelt differently) and this is addressed as best as possible e.g convert all to lower case.
+* Some 16018 out of total of 61184 businesses do not have check-in data.  In turn, 627 open US restaurants out of 13753 do not have check-in data.
+
+```{r target_city, fig.height=3}
+## US cities with no. of open restaurants
+openUsRest$city <- tolower(openUsRest$city)
+openUsRestByCity <- as.data.frame(table(openUsRest$city))
+colnames(openUsRestByCity) <- c("city", "open_rest")
+
+## US cities with no. of restaurants, including those closed
+usRest$city <- tolower(usRest$city)
+usRestByCity <- as.data.frame(table(usRest$city))
+colnames(usRestByCity) <- c("city", "all_rest")
+
+## US cities with no. of open restaurants, all restaurants, and their ratio
+usRestByCity <- merge(openUsRestByCity, usRestByCity, by = "city")
+usRestByCity$open_ratio <- usRestByCity$open_rest / usRestByCity$all_rest
+
+## Aggregate check-ins of each restaurant and then by city
+usRestChk <- merge(usRest, chkData, by = "business_id")
+usRestChk$checkin_info.sum <- rowSums(usRestChk[,107:274], na.rm=TRUE)
+
+## Aggregate check-ins of restaurants by city
+usRestChkByCity <- data.table(usRestChk)
+setkey(usRestChkByCity, "city")
+usRestChkByCity <- usRestChkByCity[, list(checkins=sum(checkin_info.sum)), by=key(usRestChkByCity)]
+
+## Add aggregated restaurants' check-ins by city
+usRestByCity <- merge(usRestByCity, usRestChkByCity, by = "city")
+
+
+## Plot bubble chart
+bbChart <- ggplot(data=usRestByCity, aes(x=open_rest, y=open_ratio, label=city), legend=TRUE)
+bbChart <- bbChart + ggtitle("Open restaurants & their check-ins in each US city") 
+bbChart <- bbChart + labs(x="No. of open restaurants", y="Ratio of open vs total restaurants")
+bbChart <- bbChart + geom_point(aes(size=checkins, color="red", alpha=.5))
+bbChart <- bbChart + geom_text(data=subset(usRestByCity, all_rest > 1000), hjust=0.5, vjust=-0.5, size=4)
+bbChart <- bbChart + scale_size_continuous(range=c(2,15), name="Check-ins") + theme(legend.position = "none")
+bbChart
+````
+
+From the plot, we have an obvious candidate city - **Las Vegas** - which overshadows every other US city in terms of no. of restaurant businesses (23% or 3190 out of all 13753 open restaurants in US) as well as the no. of check-ins (40% or 1261764 out of total 3138591 check-ins in all open restaurants in US).  In addition, the ratio of open restaurants to both open and closed restaurants in Las Vega stands at 77%, which rightly or wrongly as a proxy reflects reasonably good survival rate of restaurant business in Las Vegas.
+
+
+##### Preliminary Plot
+
+Now we plot all restaurants in Las Vegas city against Google maps.
+
+```{r closed_restaurant, fig.height=4}
+#install.packages("ggmap")
+library("ggmap")
+
+lvRestChk <- subset(usRestChk, tolower(city)=="las vegas")
+
+## Plot closed restaurants against Google Maps basemap
+lvMap <- qmap(location="Las Vegas", zoom=11, maptype="toner-lite")
+lvMap <- lvMap + ggtitle("Closed restaurants")
+lvMap <- lvMap + geom_point(data = subset(lvRestChk, open=='FALSE'), aes(x = longitude, y = latitude), color="blue", size=1.5, alpha=0.5)
+lvMap
+```
+
+```{r open_restaurants, fig.height=4}
+## Plot open restaurants against Google Maps basemap
+lvRestChk$stars_colour <- with(lvRestChk, factor(ifelse(stars>=4, 0, ifelse(stars<=2, 2, 1))))
+
+lvMap <- qmap(location="Las Vegas", zoom=11, maptype="toner-lite")
+lvMap <- lvMap + ggtitle("Open restaurants")
+lvMap <- lvMap + geom_point(data = subset(lvRestChk, open=='TRUE'), aes(x = longitude, y = latitude, color=stars_colour), size=1.5, alpha=0.5) + scale_colour_manual(values=c("red", "green", "blue"), labels=c("4-5 stars", "2.5-3.5 stars", "<=2 stars"), name="Rating")
+lvMap
+```
+
+Comparison between the clusters of closed restaurants vs clusters of open restaurants shows both their locations to be almost identical.  Notably, the largest clusters are along the stretch of route through the city centre which a search on Wikipedia reveals it to be known as the Las Vegas Strip, internationally known for its concentration of resort hotels and casinos as well as art district.  This points to the likelihood that restaurants' closures there are due to rental hikes and tenancy renewal rather than poor business or human traffic/footfalls.
+
+Also can be seen from the plots are that restaurants always line-up against major roads and concentrated in the city centre and thin out towards the outskirts.  Interestingly, the cone-shaped area north of city center bounded by the 2 highways is quite bare.  Based on Google satellite map, that area is populated by North Las Vegas Airport, golf course, a few parks, and schools.  This hints at the possibility that the area is low-income residential area, thus not favourable for setup of restaurants despite being well-connected by roads.
+
+Based on the plot on Google map, there is no immediate discernible difference in location-based clustering of restaurants that are highly rated, average, or poorly rated; they do not deviates from the general pattern of clustering of restaurants in Las Vegas.
+
+
+##### Data Cluster Analysis
+
+Now we use K-means clustering to try to further identify locations of high market demands and conducive consumer market based on 3 variables - check-ins volume, star ratings and volume of reviews (9 clusters) - together with longitude and latitude.  
+
+```{r k_means, fig.height=5}
+#install.packages("cluster")
+library("cluster")
+
+openLvRestChk <- subset(lvRestChk, open=='TRUE')
+openLvRestChk$stars_review_count <- openLvRestChk[, "stars"] * openLvRestChk[, "review_count"]
+
+## Dissimilarity matrix calculation
+dist <- daisy(na.omit(openLvRestChk[, c("checkin_info.sum", "stars_review_count", "longitude", "latitude") ]), metric="euclidean", stand=TRUE)
+
+## Run k-means with 9 clusters
+kModel <- kmeans(dist,centers=9)
+
+## Label the original data set with the clusters so that we can show summary statistics for each cluster
+#openLvRestChk$cluster <- NA
+for (i in names(kModel$cluster)) {
+  openLvRestChk[i,"cluster"] <- kModel$cluster[i]
+}
+
+## Plot clusters against Google Maps basemap
+openLvRestChk$cluster_colour <- with(openLvRestChk, factor(cluster - 1))
+
+cluMap <- qmap(location="Las Vegas", zoom=11, maptype="toner-lite")
+cluMap <- cluMap + ggtitle("K-means clusters")
+cluMap <- cluMap + geom_point(data = openLvRestChk, aes(x = longitude, y = latitude, color=cluster_colour), size=1, alpha=1) + scale_colour_manual(values=c("red", "orange", "yellow", "green", "brown", "violet", "blue", "magenta", "black"), labels=c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9"), name="Cluster")
+cluMap
+
+## Show mean of each cluster
+#by(openLvRestChk[, c("checkin_info.sum", "stars", "review_count")], INDICES=openLvRestChk$cluster, FUN=colMeans)
+
+```
+
+* Cluster C5, C3 has the highest mean check-ins (11079, 5630 respectively), star ratings (4.0, 3.8 respectively) and volume of reviews (3859, 2096 respectively) but only their cluster sizes are very small (4, 17).  While worth taking into consideration, they may not be true reflection of of the market condition and consumer sentiments at their locations.
+* Cluster C7 has the next highest mean check-ins (2729), star ratings (3.9) and volume of reviews (842). It is unsurprising that it is situated around the renowned Las Vegas Strip and would be considered prime candidate location for restaurant business.
+* Clusters towards the outskirts of the city have the lowest mean check-ins, star ratings and volume of reviews, thus should be avoided.
+
+
+##### Assumptions
+
+It should be noted that certain assumptions were made:
+
+* We are not looking for first mover advantage in places where the market have yet to be established.  Otherwise, the work carried out would have taken a totally different direction.
+* We assume there is no astroturfing but that every review submitted is genuine.
+* We initially assumed locations with high rate of closure indicate market saturation, thus to be avoided but as the work continues, it need not be so as seen above.
+* We are not factoring in the effect of entering a location where there is highly successful competitors which can have its disadvantages (as well as advantages).
+
