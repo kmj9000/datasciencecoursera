@@ -22,17 +22,16 @@ Method
 
 
 
-Preliminary Plot
+Exploratory Analysis
 ========================================================
-- Initial data exploration reveals most businesses in dataset to reside in US.  Also restaurant business is the dominant business category.  Thus both are selected to the focus.
-- Plotting a bubble chart using volume of open restaurants, closed restaurants and their check-in data reveals Las Vegas to have the bulk of restaurant business.
+- Most businesses in dataset are shown to be residing in US.  Also restaurant business is the dominant business category.  Thus both are selected to be the focus of this project.
+- A bubble chart plot using volume of open restaurants, closed restaurants and their check-in data reveals Las Vegas to be best candidate.  
 ![Candidate Cities](candidate_cities.png)
 
 
 
 K-Means Clustering
 ========================================================
-- Plotting on map reveals restaurants always line-up against major roads, concentrate around renowned Las Vegas Strip and city center while avoiding north cone-shape area (airport and likely low-income residentials).
-- Using K-means clustering based on check-ins volume, star ratings, volume of reviews as well as latitude/longitude reveals (unsurprisingly) locations along renowned Las Vegas Strip to have highest potential.
-***
+- Plotting on map reveals restaurants always line-up against major roads, concentrate around renowned Las Vegas Strip and city center while avoiding north cone-shape area.
+- K-means clustering based on check-ins volume, star ratings, volume of reviews as well as latitude/longitude reveals locations along renowned Las Vegas Strip to have highest potential.  
 ![K-means Clustering](k_clusters.png)
